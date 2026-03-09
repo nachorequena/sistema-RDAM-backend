@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+dist/
+
+# Environment
+.env
+.env.local
+.env.docker
+!.env.docker.example
+
+# Prisma
+prisma/migrations/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Test coverage
+coverage/

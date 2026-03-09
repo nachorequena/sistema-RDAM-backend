@@ -1,0 +1,114 @@
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: rdam_postgres
+    environment:
+      POSTGRES_USER: rdam
+      POSTGRES_PASSWORD: rdam_pass
+      POSTGRES_DB: rdamdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rdam -d rdamdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── MinIO — Object Storage (S3-compatible) ──────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    container_name: rdam_minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+  # ── Mailhog — Bandeja de email para desarrollo ──────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: rdam_mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
+  # ── MinIO Init — crea los buckets la primera vez ────────────────────────────
+  # MinIO Init — crea los buckets la primera vez
+  # Servicio que crea los buckets 'rdam-adjuntos' y 'rdam-pdfs' y marca
+  # 'rdam-pdfs' como público. Corre una sola vez y termina (restart: "no").
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: rdam_minio_init
+    depends_on:
+      - minio
+    entrypoint: >
+      sh -c "
+        until mc alias set local http://minio:9000 minioadmin minioadmin 2>/dev/null; do
+          echo 'esperando minio...' && sleep 1;
+        done &&
+        mc mb --ignore-existing local/rdam-adjuntos &&
+        mc mb --ignore-existing local/rdam-pdfs &&
+        (mc anonymous set download local/rdam-pdfs || mc policy set download local/rdam-pdfs || true) &&
+        echo 'buckets creados';
+      "
+    restart: "no"
+  # Ver README.md → sección "Crear los buckets en MinIO"
+
+  # ── Backend RDAM ─────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rdam_backend
+    env_file:
+      - .env.docker
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+      - minio
+      - mailhog
+    # Espera a postgres, corre migraciones y arranca
+    command: >
+      sh -c "
+        echo 'Esperando PostgreSQL...' &&
+        until npx prisma migrate deploy; do
+          echo 'Reintentando migraciones en 5s...' && sleep 5;
+        done &&
+        if [ \"${RUN_PRISMA_SEED}\" = \"1\" ]; then
+          echo 'Ejecutando prisma:seed...' && npm run prisma:seed || true;
+        fi &&
+        npm run start:prod
+      "
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+# ── PlusPagos Mock ───────────────────────────────────────────────────────────
+  pluspagos-mock:
+    image: node:20-alpine
+    container_name: rdam_pluspagos_mock
+    working_dir: /app
+    volumes:
+      - ./pluspagos-mock-simple:/app
+    command: sh -c "npm install --prefer-offline && node server.js"
+    ports:
+      - "3000:3000"
+    environment:
+      WEBHOOK_URL: "http://backend:3001/api/pagos/webhook"
+    restart: unless-stopped
+volumes:
+  postgres_data:
+  minio_data:
+  

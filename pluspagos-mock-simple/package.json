@@ -1,0 +1,13 @@
+{
+  "name": "pluspagos-mock-simple",
+  "version": "1.0.0",
+  "description": "Simulador simple de pasarela PlusPagos - Summer Campus 2026",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0",
+    "express": "^4.18.2"
+  }
+}

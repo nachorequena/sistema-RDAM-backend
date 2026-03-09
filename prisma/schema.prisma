@@ -1,0 +1,207 @@
+// ============================================================================
+// schema.prisma — RDAM Sistema de Gestión de Certificados Digitales
+// Espeja exactamente el DDL PostgreSQL de la Fase 1.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum SolEstado {
+  pendiente
+  pagado
+  en_revision
+  publicado
+  publicado_vencido
+  vencido
+  rechazado
+
+  @@map("sol_estado_enum")
+}
+
+enum RolInterno {
+  gestor
+  admin
+
+  @@map("rol_interno_enum")
+}
+
+enum TipoAdjunto {
+  dni
+  comprobante
+  otro
+
+  @@map("tipo_adjunto_enum")
+}
+
+// ── MODELOS ─────────────────────────────────────────────────────────────────
+
+model UsuarioInterno {
+  id            Int        @id @default(autoincrement())
+  nombre        String     @db.VarChar(200)
+  email         String     @unique @db.VarChar(254)
+  passwordHash  String     @map("password_hash") @db.VarChar(255)
+  rol           RolInterno
+  activo        Boolean    @default(true)
+  ultimoLogin   DateTime?  @map("ultimo_login") @db.Timestamptz
+
+  // Auditoría de cambios
+  updatedById   Int?       @map("updated_by")
+  updatedBy     UsuarioInterno?  @relation("UpdatedBy", fields: [updatedById], references: [id])
+  updatedByUsers UsuarioInterno[] @relation("UpdatedBy")
+
+  // Soft delete
+  deletedAt     DateTime?  @map("deleted_at") @db.Timestamptz
+  deletedById   Int?       @map("deleted_by")
+  deletedBy     UsuarioInterno?  @relation("DeletedBy", fields: [deletedById], references: [id])
+  deletedByUsers UsuarioInterno[] @relation("DeletedBy")
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relaciones inversas
+  solicitudesGestionadas Solicitud[]      @relation("OperadorSolicitud")
+  historialAcciones      HistorialEstado[] @relation("OperadorHistorial")
+
+  @@map("usuario_interno")
+}
+
+model TipoCertificado {
+  id                  Int      @id @default(autoincrement())
+  codigo              String   @unique @db.VarChar(20)
+  descripcion         String   @db.VarChar(200)
+  precio              Decimal  @db.Decimal(10, 2)
+  diasVencimientoPrd  Int      @default(60) @map("dias_vencimiento_prd")
+  diasVencimientoDev  Int      @default(15) @map("dias_vencimiento_dev")
+  diasPdfPrd          Int      @default(65) @map("dias_pdf_prd")
+  diasPdfDev          Int      @default(90) @map("dias_pdf_dev")
+  activo              Boolean  @default(true)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  solicitudes Solicitud[]
+
+  @@map("tipo_certificado")
+}
+
+model Solicitud {
+  id                  Int        @id @default(autoincrement())
+  nroTramite          String     @unique @map("nro_tramite") @db.VarChar(30)
+  cuil                String     @db.VarChar(13)
+  nombreCompleto      String     @map("nombre_completo") @db.VarChar(200)
+  email               String     @db.VarChar(254)
+  telefono            String?    @db.VarChar(30)
+
+  tipoCertId          Int        @map("tipo_cert_id")
+  tipoCert            TipoCertificado @relation(fields: [tipoCertId], references: [id])
+
+  solEstado           SolEstado  @default(pendiente) @map("sol_estado")
+
+  operadorId          Int?       @map("operador_id")
+  operador            UsuarioInterno? @relation("OperadorSolicitud", fields: [operadorId], references: [id])
+
+  observacionRechazo  String?    @map("observacion_rechazo")
+
+  // PDF y acceso tokenizado
+  tokenPdf            String?    @unique @map("token_pdf") @db.Char(64)
+  rutaPdf             String?    @map("ruta_pdf") @db.VarChar(500)
+
+  // UUID de intento de pago — enviado como TransaccionComercioId a PlusPagos.
+  // Lookup inverso: cuando llega el webhook con ese UUID, RDAM identifica la solicitud.
+  // Se sobreescribe en cada nuevo intento (un UUID por intento, no por solicitud).
+  pagoIntentoId       String?    @unique @map("pago_intento_id") @db.VarChar(36)
+
+  // Timestamps de ciclo de vida
+  // fecVencimientoPago: calculada al CREAR la solicitud (NOW() + dias_vencimiento)
+  fecVencimientoPago  DateTime?  @map("fec_vencimiento_pago") @db.Timestamptz
+  fecPago             DateTime?  @map("fec_pago") @db.Timestamptz
+  fecEmision          DateTime?  @map("fec_emision") @db.Timestamptz
+  fecVencimiento      DateTime?  @map("fec_vencimiento") @db.Timestamptz
+
+  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  pagos               Pago[]
+  adjuntos            Adjunto[]
+  historial           HistorialEstado[]
+
+  @@map("solicitud")
+}
+
+model Pago {
+  id           Int      @id @default(autoincrement())
+  solicitudId  Int      @map("solicitud_id")
+  solicitud    Solicitud @relation(fields: [solicitudId], references: [id])
+
+  // Idempotencia: TransaccionPlataformaId del mock → webhook_id en BD
+  webhookId    String   @unique @map("webhook_id") @db.VarChar(100)
+
+  monto        Decimal  @db.Decimal(10, 2)
+  // EstadoId del mock: 3=REALIZADA(aprobado), 4=RECHAZADA
+  // En PRD puede ser: 1=APROBADO, 4=RECHAZADA, 7=EXPIRADA, 8=CANCELADA, 9=DEVUELTA, 11=VENCIDA
+  codigoPp     Int      @map("codigo_pp")
+  estadoPp     String   @map("estado_pp") @db.VarChar(30)
+  payloadRaw   Json     @map("payload_raw")
+  procesado    Boolean  @default(false)
+  errorMsg     String?  @map("error_msg")
+  procesadoAt  DateTime @default(now()) @map("procesado_at") @db.Timestamptz
+
+  @@map("pago")
+}
+
+model Adjunto {
+  id              Int         @id @default(autoincrement())
+  // NULL en Fase 1 (pre-upload); NOT NULL en Fase 2 (solicitud confirmada)
+  solicitudId     Int?        @map("solicitud_id")
+  solicitud       Solicitud?  @relation(fields: [solicitudId], references: [id])
+
+  tipo            TipoAdjunto
+  nombreOrig      String      @map("nombre_orig") @db.VarChar(255)
+  rutaStorage     String      @map("ruta_storage") @db.VarChar(500)
+  mimeType        String      @map("mime_type") @db.VarChar(100)
+  tamanioBytes    Int         @map("tamanio_bytes")
+  checksumSha256  String?     @map("checksum_sha256") @db.Char(64)
+  expiraHuerfanoAt DateTime   @default(dbgenerated("(NOW() + INTERVAL '24 hours')")) @map("expira_huerfano_at") @db.Timestamptz
+  uploadedAt      DateTime    @default(now()) @map("uploaded_at") @db.Timestamptz
+
+  @@map("adjunto")
+}
+
+model HistorialEstado {
+  id           Int        @id @default(autoincrement())
+  solicitudId  Int        @map("solicitud_id")
+  solicitud    Solicitud  @relation(fields: [solicitudId], references: [id])
+
+  estadoAnt    SolEstado? @map("estado_ant")
+  estadoNuevo  SolEstado  @map("estado_nuevo")
+
+  operadorId   Int?       @map("operador_id")
+  operador     UsuarioInterno? @relation("OperadorHistorial", fields: [operadorId], references: [id])
+
+  actor        String     @default("sistema") @db.VarChar(50)
+  observacion  String?
+  ipOrigen     String?    @map("ip_origen") @db.VarChar(45)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("historial_estado")
+}
+
+model OtpCiudadano {
+  id          Int      @id @default(autoincrement())
+  email       String   @db.VarChar(254)
+  codigo      String   @db.Char(6)
+  intentos    Int      @default(0)
+  maxIntentos Int      @default(3) @map("max_intentos")
+  expiraAt    DateTime @default(dbgenerated("(NOW() + INTERVAL '10 minutes')")) @map("expira_at") @db.Timestamptz
+  usado       Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("otp_ciudadano")
+}

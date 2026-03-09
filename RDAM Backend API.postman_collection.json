@@ -1,0 +1,1252 @@
+{
+  "info": {
+    "_postman_id": "bf8e1f2f-85e8-468a-9728-869e94eb0328",
+    "name": "RDAM Backend API",
+    "description": "Colección completa para el sistema de gestión de certificados digitales RDAM.\n\n## Flujo ciudadano\n1. OTP: solicitar → verificar → obtener access_token\n2. Adjuntos: subir archivos → obtener adjunto_ids\n3. Solicitud: crear con adjunto_ids → obtener nro_tramite\n4. Pago: iniciar → se redirige a PlusPagos → webhook confirma\n5. Estado: consultar avance del trámite\n\n## Flujo interno\n1. Login: POST /auth/interno/login → access_token\n2. Tomar solicitud → revisar → publicar o rechazar\n\n## Variables de entorno\nConfigurar en el environment de Postman:\n- BASE_URL: http://localhost:3001/api\n- CITIZEN_TOKEN: (se autocompleta tras verificar OTP)\n- INTERNAL_TOKEN: (se autocompleta tras login interno)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "48971180",
+    "_collection_link": "https://go.postman.co/collection/48971180-bf8e1f2f-85e8-468a-9728-869e94eb0328?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "🔐 Auth — Ciudadano (OTP)",
+      "item": [
+        {
+          "name": "1a. Solicitar OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Mensaje de envío', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.message).to.include('Código');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"juan@test.com\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/auth/otp/solicitar",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "auth",
+                "otp",
+                "solicitar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "1b. Verificar OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('access_token presente', () => pm.expect(json.data.access_token).to.be.a('string'));",
+                  "pm.collectionVariables.set('CITIZEN_TOKEN', json.data.access_token);",
+                  "console.log('Token ciudadano guardado');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{CITIZEN_EMAIL}}\",\n  \"codigo\": \"{{OTP_CODE}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/auth/otp/verificar",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "auth",
+                "otp",
+                "verificar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "1c. Logout ciudadano",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/auth/logout",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🔐 Auth — Interno (Gestor/Admin)",
+      "item": [
+        {
+          "name": "2a. Login gestor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('access_token y rol presentes', () => {",
+                  "  pm.expect(json.data.access_token).to.be.a('string');",
+                  "  pm.expect(json.data.rol).to.be.oneOf(['gestor', 'admin']);",
+                  "});",
+                  "pm.environment.set('INTERNAL_TOKEN', json.data.access_token);",
+                  "pm.collectionVariables.set('INTERNAL_TOKEN', json.data.access_token);",
+                  "console.log('Token interno guardado en environment y collection variables. Rol:', json.data.rol);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"gestor@rdam.gob.ar\",\n  \"password\": \"Gestor1234!\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/auth/interno/login",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "auth",
+                "interno",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2b. Login admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('access_token y rol admin presentes', () => {",
+                  "  pm.expect(json.data.access_token).to.be.a('string');",
+                  "  pm.expect(json.data.rol).to.equal('admin');",
+                  "});",
+                  "pm.environment.set('INTERNAL_TOKEN', json.data.access_token);",
+                  "pm.collectionVariables.set('INTERNAL_TOKEN', json.data.access_token);",
+                  "console.log('Token admin guardado en environment y collection variables.');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@rdam.gob.ar\",\n  \"password\": \"Admin1234!\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/auth/interno/login",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "auth",
+                "interno",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2c. Refresh token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/auth/refresh",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📎 Adjuntos (ciudadano)",
+      "item": [
+        {
+          "name": "3a. Subir adjunto (PDF)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('adjunto_id presente', () => pm.expect(json.data.id).to.be.a('number'));",
+                  "pm.collectionVariables.set('ADJUNTO_ID', json.data.id);",
+                  "pm.environment.set('ADJUNTO_ID', json.data.id);",
+                  "console.log('Adjunto ID guardado:', json.data.id);"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "console.warn('⚠️ Recordatorio: asegurate de haber seleccionado un archivo PDF real en el campo \"archivo\" del body antes de ejecutar este request.');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{CITIZEN_TOKEN}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "archivo",
+                  "type": "file",
+                  "description": "Seleccionar un PDF real desde tu computadora antes de ejecutar",
+                  "value": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/adjuntos/upload",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "adjuntos",
+                "upload"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3b. Eliminar adjunto huérfano",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{CITIZEN_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/adjuntos/{{ADJUNTO_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "adjuntos",
+                "{{ADJUNTO_ID}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📋 Solicitudes (ciudadano)",
+      "item": [
+        {
+          "name": "4a. Crear solicitud",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('nro_tramite con formato RDAM-YYYYMMDD-NNNN', () => {",
+                  "  pm.expect(json.data.nroTramite).to.match(/^RDAM-\\d{8}-\\d{4}$/);",
+                  "});",
+                  "pm.test('fec_vencimiento_pago calculada al crear', () => {",
+                  "  pm.expect(json.data.fecVencimientoPago).to.be.a('string');",
+                  "  const fecVenc = new Date(json.data.fecVencimientoPago);",
+                  "  const createdAt = new Date(json.data.createdAt);",
+                  "  const diffDias = Math.round((fecVenc - createdAt) / (1000*60*60*24));",
+                  "  pm.expect(diffDias).to.be.within(14, 16);",
+                  "  console.log('Días hasta vencimiento pago:', diffDias);",
+                  "});",
+                  "pm.collectionVariables.set('NRO_TRAMITE', json.data.nroTramite);",
+                  "pm.environment.set('NRO_TRAMITE', json.data.nroTramite);",
+                  "pm.collectionVariables.set('SOLICITUD_ID', json.data.id);",
+                  "pm.environment.set('SOLICITUD_ID', json.data.id);",
+                  "console.log('Trámite creado:', json.data.nroTramite);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const adjuntoId = pm.environment.get('ADJUNTO_ID') || pm.collectionVariables.get('ADJUNTO_ID');",
+                  "if (!adjuntoId) {",
+                  "    throw new Error('⚠️ ADJUNTO_ID no está definido. Primero ejecutá \"3a. Subir adjunto (PDF)\" para obtener un adjunto_id válido.');",
+                  "}",
+                  "pm.variables.set('ADJUNTO_ID', adjuntoId);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{CITIZEN_TOKEN}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cuil\": \"20-34567890-1\",\n  \"nombreCompleto\": \"Juan Carlos Pérez\",\n  \"email\": \"juan@test.com\",\n  \"telefono\": \"+54911234567\",\n  \"tipoCertId\": 1,\n  \"adjuntoIds\": [{{ADJUNTO_ID}}]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/solicitudes",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "solicitudes"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4b. Listar mis solicitudes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{CITIZEN_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/solicitudes?page=1&limit=10",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "solicitudes"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4c. Detalle de solicitud",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{CITIZEN_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/solicitudes/{{SOLICITUD_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "solicitudes",
+                "{{SOLICITUD_ID}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4d. Consulta pública por nro_tramite (sin login)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Historial de estados incluido', () => {",
+                  "  pm.expect(json.data[0].historial).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/solicitudes/estado?nroTramite={{NRO_TRAMITE}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "solicitudes",
+                "estado"
+              ],
+              "query": [
+                {
+                  "key": "nroTramite",
+                  "value": "{{NRO_TRAMITE}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4e. Iniciar pago — genera payload para PlusPagos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Payload encriptado contiene campos PlusPagos', () => {",
+                  "  pm.expect(json.data.Comercio).to.be.a('string');",
+                  "  pm.expect(json.data.TransaccionComercioId).to.match(",
+                  "    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,",
+                  "    'TransaccionComercioId debe ser un UUID v4'",
+                  "  );",
+                  "  pm.expect(json.data.Monto).to.be.a('string');",
+                  "  pm.expect(json.data.CallbackSuccess).to.be.a('string');",
+                  "  pm.expect(json.data.UrlSuccess).to.be.a('string');",
+                  "  pm.expect(json.data.pluspagosUrl).to.be.a('string');",
+                  "});",
+                  "pm.environment.set('PAGO_INTENTO_ID', json.data.TransaccionComercioId);",
+                  "pm.collectionVariables.set('PAGO_INTENTO_ID', json.data.TransaccionComercioId);",
+                  "console.log('UUID del intento guardado:', json.data.TransaccionComercioId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{CITIZEN_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/solicitudes/{{NRO_TRAMITE}}/iniciar-pago",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "solicitudes",
+                "{{NRO_TRAMITE}}",
+                "iniciar-pago"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "💳 Pagos (webhooks)",
+      "item": [
+        {
+          "name": "5a. Simular webhook aprobado (EstadoId=3)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 (PlusPagos espera siempre 200)', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('received=true', () => pm.expect(json.data.received).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Tipo\": \"PAGO\",\n  \"TransaccionPlataformaId\": \"{{$guid}}\",\n  \"TransaccionComercioId\": \"{{PAGO_INTENTO_ID}}\",\n  \"Monto\": \"1200.00\",\n  \"EstadoId\": \"3\",\n  \"Estado\": \"REALIZADA\",\n  \"FechaProcesamiento\": \"2026-01-21T15:30:00.000Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/pagos/webhook",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "pagos",
+                "webhook"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5b. Simular webhook rechazado (EstadoId=4)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Tipo\": \"PAGO\",\n  \"TransaccionPlataformaId\": \"654322\",\n  \"TransaccionComercioId\": \"REEMPLAZAR-CON-UUID-DEL-INTENTO\",\n  \"Monto\": \"1200.00\",\n  \"EstadoId\": \"4\",\n  \"Estado\": \"RECHAZADA\",\n  \"FechaProcesamiento\": \"2026-01-21T15:30:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/pagos/webhook",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "pagos",
+                "webhook"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5c. Simular webhook DUPLICADO (idempotencia)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Sigue respondiendo 200 en duplicado', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('received=true en duplicado', () => pm.expect(json.data.received).to.be.true);",
+                  "console.log('Idempotencia OK — duplicado ignorado sin error');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Tipo\": \"PAGO\",\n  \"TransaccionPlataformaId\": \"654321\",\n  \"TransaccionComercioId\": \"MISMO-UUID-QUE-EN-5a\",\n  \"Monto\": \"1200.00\",\n  \"EstadoId\": \"3\",\n  \"Estado\": \"REALIZADA\",\n  \"FechaProcesamiento\": \"2026-01-21T15:30:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/pagos/webhook",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "pagos",
+                "webhook"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5d. Simular callback S2S (éxito)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaccionId\": \"654323\",\n  \"monto\": \"1200.00\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/pagos/callback?intento={{PAGO_INTENTO_ID}}&status=success",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "pagos",
+                "callback"
+              ],
+              "query": [
+                {
+                  "key": "intento",
+                  "value": "{{PAGO_INTENTO_ID}}"
+                },
+                {
+                  "key": "status",
+                  "value": "success"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🏛️ Gestión Interna (gestor/admin)",
+      "item": [
+        {
+          "name": "6a. Listar solicitudes (filtros)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Respuesta contiene array de solicitudes', () => {",
+                  "  pm.expect(json.data).to.be.an('array');",
+                  "});",
+                  "pm.test('Paginación presente', () => {",
+                  "  pm.expect(json.meta).to.have.property('total');",
+                  "  pm.expect(json.meta).to.have.property('page');",
+                  "  pm.expect(json.meta).to.have.property('limit');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{INTERNAL_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/gestion/solicitudes?estado=pagado&page=1&limit=20",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "gestion",
+                "solicitudes"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "pagado"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6b. Detalle solicitud (con URLs presignadas de adjuntos)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{INTERNAL_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/gestion/solicitudes/{{SOLICITUD_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "gestion",
+                "solicitudes",
+                "{{SOLICITUD_ID}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6c. Tomar solicitud (PAGADO → EN_REVISION)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Estado cambia a en_revision', () => {",
+                  "  pm.expect(json.data.solEstado).to.equal('en_revision');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{INTERNAL_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/gestion/solicitudes/{{SOLICITUD_ID}}/tomar",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "gestion",
+                "solicitudes",
+                "{{SOLICITUD_ID}}",
+                "tomar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6d. Publicar certificado (→ PUBLICADO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Estado es publicado', () => pm.expect(json.data.solEstado).to.equal('publicado'));",
+                  "pm.test('token_pdf presente (64 chars hex)', () => {",
+                  "  pm.expect(json.data.tokenPdf).to.match(/^[a-f0-9]{64}$/);",
+                  "});",
+                  "pm.test('fec_vencimiento calculada', () => {",
+                  "  pm.expect(json.data.fecVencimiento).to.be.a('string');",
+                  "});",
+                  "pm.collectionVariables.set('PDF_TOKEN', json.data.tokenPdf);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{INTERNAL_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/gestion/solicitudes/{{SOLICITUD_ID}}/publicar",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "gestion",
+                "solicitudes",
+                "{{SOLICITUD_ID}}",
+                "publicar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6e. Rechazar solicitud",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Estado es rechazado', () => pm.expect(json.data.solEstado).to.equal('rechazado'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{INTERNAL_TOKEN}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"observacion\": \"La documentación adjunta no es legible. Por favor reenvíe una copia clara del DNI y comprobante de domicilio.\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/gestion/solicitudes/{{SOLICITUD_ID}}/rechazar",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "gestion",
+                "solicitudes",
+                "{{SOLICITUD_ID}}",
+                "rechazar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6f. Dashboard métricas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{INTERNAL_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/gestion/dashboard",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "gestion",
+                "dashboard"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📄 Certificados (público)",
+      "item": [
+        {
+          "name": "7a. Descargar PDF por token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type es PDF', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');",
+                  "});",
+                  "pm.test('Content-Disposition es attachment', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/certificados/{{PDF_TOKEN}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "certificados",
+                "{{PDF_TOKEN}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7b. Token inválido → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404 para token inválido', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/certificados/0000000000000000000000000000000000000000000000000000000000000000",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "certificados",
+                "0000000000000000000000000000000000000000000000000000000000000000"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "👤 Usuarios internos (admin)",
+      "item": [
+        {
+          "name": "8a. Listar usuarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{INTERNAL_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/usuarios",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "usuarios"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "8b. Crear usuario gestor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{INTERNAL_TOKEN}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"María García\",\n  \"email\": \"mgarcia@rdam.gob.ar\",\n  \"password\": \"Temporal1234!\",\n  \"rol\": \"gestor\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/usuarios",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "usuarios"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "8c. Actualizar rol de usuario",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{INTERNAL_TOKEN}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rol\": \"admin\",\n  \"activo\": true\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/usuarios/2",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "usuarios",
+                "2"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "8d. Borrado lógico de usuario",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{INTERNAL_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/usuarios/2",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "usuarios",
+                "2"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "⚙️ Jobs internos",
+      "item": [
+        {
+          "name": "9a. Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('DB conectada', () => pm.expect(json.data.db).to.equal('ok'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/internal/health",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "internal",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9b. Job: vencer pagados",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Token",
+                "value": "INTERNAL_TOKEN_SECRET"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/internal/jobs/vencer-pagados",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "internal",
+                "jobs",
+                "vencer-pagados"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9c. Job: vencer publicados",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Token",
+                "value": "INTERNAL_TOKEN_SECRET"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/internal/jobs/vencer-publicados",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "internal",
+                "jobs",
+                "vencer-publicados"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:3001/api"
+    },
+    {
+      "key": "CITIZEN_TOKEN",
+      "value": ""
+    },
+    {
+      "key": "INTERNAL_TOKEN",
+      "value": ""
+    },
+    {
+      "key": "NRO_TRAMITE",
+      "value": ""
+    },
+    {
+      "key": "ADJUNTO_ID",
+      "value": ""
+    },
+    {
+      "key": "SOLICITUD_ID",
+      "value": ""
+    },
+    {
+      "key": "PDF_TOKEN",
+      "value": ""
+    },
+    {
+      "key": "PAGO_INTENTO_ID",
+      "value": ""
+    }
+  ]
+}

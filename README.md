@@ -51,7 +51,6 @@ Copy-Item .env.docker.example .env.docker
 
 Edite `.env.docker` si necesitás ajustar claves o poner `RUN_PRISMA_SEED=1` la primera vez.
 
-
 Desde la carpeta raíz del proyecto (donde está `docker-compose.yml`) ejecutá (recomendado):
 
 ```cmd
@@ -290,7 +289,7 @@ Ver `PLAN_PRUEBAS_COMPLETO.md` para los 96 casos de prueba manuales.
 | MinIO no levanta con `latest`           | Incompatibilidad de versión | El compose ya usa `RELEASE.2024-01-16T16-07-38Z` — no cambiar a `latest` |
 | `docker compose` se cuelga              | Docker Desktop no iniciado  | Abrir Docker Desktop, esperar ícono verde                                |
 
-| `NoSuchBucket` al subir adjuntos        | Buckets de MinIO no existen aún | Re-ejecutar el init de MinIO para crear los buckets: `docker compose run --rm minio-init`. Verificar en la consola MinIO (http://localhost:9001) que `rdam-adjuntos` y `rdam-pdfs` existen. |
+| `NoSuchBucket` al subir adjuntos | Buckets de MinIO no existen aún | Re-ejecutar el init de MinIO para crear los buckets: `docker compose run --rm minio-init`. Verificar en la consola MinIO (http://localhost:9001) que `rdam-adjuntos` y `rdam-pdfs` existen. |
 | `fn_generar_nro_tramite() no existe` (caso raro) | Funciones PL/pgSQL separadas no aplicadas | Si las migraciones no incluyeron las funciones (caso antiguo) ejecutar manualmente: `docker compose exec postgres psql -U rdam -d rdamdb -f prisma/migrations/20260304015613_init/migration_funciones_sql.sql` o forzar `docker compose exec backend npx prisma migrate deploy`. |
 
 ### Nota importante sobre el seed y variables de entorno
@@ -309,7 +308,6 @@ Si ves problemas relacionados con falta de datos (ej. tipos de certificado falta
 ```bash
 docker compose exec backend npm run prisma:seed
 ```
-
 
 ---
 

@@ -21,7 +21,6 @@ CREATE TABLE "usuario_interno" (
     "deleted_by" INTEGER,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "usuario_interno_pkey" PRIMARY KEY ("id")
 );
 
@@ -30,7 +29,7 @@ CREATE TABLE "tipo_certificado" (
     "id" SERIAL NOT NULL,
     "codigo" VARCHAR(20) NOT NULL,
     "descripcion" VARCHAR(200) NOT NULL,
-    "precio" DECIMAL(10,2) NOT NULL,
+    "precio" DECIMAL(10, 2) NOT NULL,
     "dias_vencimiento_prd" INTEGER NOT NULL DEFAULT 60,
     "dias_vencimiento_dev" INTEGER NOT NULL DEFAULT 15,
     "dias_pdf_prd" INTEGER NOT NULL DEFAULT 65,
@@ -38,7 +37,6 @@ CREATE TABLE "tipo_certificado" (
     "activo" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "tipo_certificado_pkey" PRIMARY KEY ("id")
 );
 
@@ -63,7 +61,6 @@ CREATE TABLE "solicitud" (
     "fec_vencimiento" TIMESTAMPTZ,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "solicitud_pkey" PRIMARY KEY ("id")
 );
 
@@ -72,14 +69,13 @@ CREATE TABLE "pago" (
     "id" SERIAL NOT NULL,
     "solicitud_id" INTEGER NOT NULL,
     "webhook_id" VARCHAR(100) NOT NULL,
-    "monto" DECIMAL(10,2) NOT NULL,
+    "monto" DECIMAL(10, 2) NOT NULL,
     "codigo_pp" INTEGER NOT NULL,
     "estado_pp" VARCHAR(30) NOT NULL,
     "payload_raw" JSONB NOT NULL,
     "procesado" BOOLEAN NOT NULL DEFAULT false,
     "error_msg" TEXT,
     "procesado_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "pago_pkey" PRIMARY KEY ("id")
 );
 
@@ -95,7 +91,6 @@ CREATE TABLE "adjunto" (
     "checksum_sha256" CHAR(64),
     "expira_huerfano_at" TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
     "uploaded_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "adjunto_pkey" PRIMARY KEY ("id")
 );
 
@@ -110,7 +105,6 @@ CREATE TABLE "historial_estado" (
     "observacion" TEXT,
     "ip_origen" VARCHAR(45),
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "historial_estado_pkey" PRIMARY KEY ("id")
 );
 
@@ -124,58 +118,65 @@ CREATE TABLE "otp_ciudadano" (
     "expira_at" TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '10 minutes'),
     "usado" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT "otp_ciudadano_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "usuario_interno_email_key" ON "usuario_interno"("email");
+CREATE UNIQUE INDEX "usuario_interno_email_key" ON "usuario_interno" ("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tipo_certificado_codigo_key" ON "tipo_certificado"("codigo");
+CREATE UNIQUE INDEX "tipo_certificado_codigo_key" ON "tipo_certificado" ("codigo");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "solicitud_nro_tramite_key" ON "solicitud"("nro_tramite");
+CREATE UNIQUE INDEX "solicitud_nro_tramite_key" ON "solicitud" ("nro_tramite");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "solicitud_token_pdf_key" ON "solicitud"("token_pdf");
+CREATE UNIQUE INDEX "solicitud_token_pdf_key" ON "solicitud" ("token_pdf");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "solicitud_pago_intento_id_key" ON "solicitud"("pago_intento_id");
+CREATE UNIQUE INDEX "solicitud_pago_intento_id_key" ON "solicitud" ("pago_intento_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "pago_webhook_id_key" ON "pago"("webhook_id");
+CREATE UNIQUE INDEX "pago_webhook_id_key" ON "pago" ("webhook_id");
 
 -- AddForeignKey
-ALTER TABLE "usuario_interno" ADD CONSTRAINT "usuario_interno_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "usuario_interno"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "usuario_interno"
+ADD CONSTRAINT "usuario_interno_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "usuario_interno" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "usuario_interno" ADD CONSTRAINT "usuario_interno_deleted_by_fkey" FOREIGN KEY ("deleted_by") REFERENCES "usuario_interno"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "usuario_interno"
+ADD CONSTRAINT "usuario_interno_deleted_by_fkey" FOREIGN KEY ("deleted_by") REFERENCES "usuario_interno" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "solicitud" ADD CONSTRAINT "solicitud_tipo_cert_id_fkey" FOREIGN KEY ("tipo_cert_id") REFERENCES "tipo_certificado"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "solicitud"
+ADD CONSTRAINT "solicitud_tipo_cert_id_fkey" FOREIGN KEY ("tipo_cert_id") REFERENCES "tipo_certificado" ("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "solicitud" ADD CONSTRAINT "solicitud_operador_id_fkey" FOREIGN KEY ("operador_id") REFERENCES "usuario_interno"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "solicitud"
+ADD CONSTRAINT "solicitud_operador_id_fkey" FOREIGN KEY ("operador_id") REFERENCES "usuario_interno" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "pago" ADD CONSTRAINT "pago_solicitud_id_fkey" FOREIGN KEY ("solicitud_id") REFERENCES "solicitud"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "pago"
+ADD CONSTRAINT "pago_solicitud_id_fkey" FOREIGN KEY ("solicitud_id") REFERENCES "solicitud" ("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "adjunto" ADD CONSTRAINT "adjunto_solicitud_id_fkey" FOREIGN KEY ("solicitud_id") REFERENCES "solicitud"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "adjunto"
+ADD CONSTRAINT "adjunto_solicitud_id_fkey" FOREIGN KEY ("solicitud_id") REFERENCES "solicitud" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "historial_estado" ADD CONSTRAINT "historial_estado_solicitud_id_fkey" FOREIGN KEY ("solicitud_id") REFERENCES "solicitud"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "historial_estado"
+ADD CONSTRAINT "historial_estado_solicitud_id_fkey" FOREIGN KEY ("solicitud_id") REFERENCES "solicitud" ("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "historial_estado" ADD CONSTRAINT "historial_estado_operador_id_fkey" FOREIGN KEY ("operador_id") REFERENCES "usuario_interno"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "historial_estado"
+ADD CONSTRAINT "historial_estado_operador_id_fkey" FOREIGN KEY ("operador_id") REFERENCES "usuario_interno" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ============================================================================
 -- Funciones y trigger adicionales (movidas desde migration_funciones_sql.sql)
 -- ============================================================================
 
 ALTER TABLE solicitud
-    ADD COLUMN IF NOT EXISTS pago_intento_id VARCHAR(36) UNIQUE;
+ADD COLUMN IF NOT EXISTS pago_intento_id VARCHAR(36) UNIQUE;
 
 CREATE OR REPLACE FUNCTION fn_generar_nro_tramite()
 RETURNS VARCHAR AS $$

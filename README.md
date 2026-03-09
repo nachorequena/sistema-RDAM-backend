@@ -41,20 +41,36 @@ docker compose version
 
 ### 2. Levantar todos los servicios
 
-Desde la carpeta raíz del proyecto (donde está `docker-compose.yml`):
+Antes de levantar, crear el archivo de entorno a partir del ejemplo (obligatorio):
 
-```cmd
-docker compose up -d
+```bash
+cp .env.docker.example .env.docker
+# o en PowerShell:
+Copy-Item .env.docker.example .env.docker
 ```
 
-La **primera vez** descarga las imágenes y construye la imagen del backend. Puede tardar 5-10 minutos. Las siguientes veces es instantáneo.
+Edite `.env.docker` si necesitás ajustar claves o poner `RUN_PRISMA_SEED=1` la primera vez.
 
-Al levantar, el backend ejecuta automáticamente las migraciones de base de datos.
 
-- Las migraciones de base de datos (siempre)
-- El seed con los datos iniciales (tipos de certificado y usuarios) SOLO si en ` .env.docker` está `RUN_PRISMA_SEED=1`.
+Desde la carpeta raíz del proyecto (donde está `docker-compose.yml`) ejecutá (recomendado):
 
-Nota: Para hacer el seed en la primera ejecución pon `RUN_PRISMA_SEED=1` en ` .env.docker` antes de levantar los servicios. Tras confirmar que el seed corrió correctamente, cambia `RUN_PRISMA_SEED` a `0` y recrea/ reinicia el contenedor `backend` para evitar que el seed se ejecute de nuevo en arranques posteriores.
+```cmd
+docker compose --env-file .env.docker up -d --build
+```
+
+Este comando garantiza que las variables definidas en `.env.docker` se usen durante el arranque de Compose (útil para `RUN_PRISMA_SEED=1`).
+
+Alternativa (si no querés usar `--env-file`):
+
+```cmd
+docker compose up -d --build
+```
+
+La **primera vez** descarga las imágenes y construye la imagen del backend. Puede tardar 5-10 minutos. Las siguientes veces son más rápidas.
+
+Al levantar, el backend ejecuta automáticamente las migraciones de base de datos. El seed con los datos iniciales (tipos de certificado y usuarios) se ejecuta si en `.env.docker` tenés `RUN_PRISMA_SEED=1`.
+
+Nota: Para hacer el seed en la primera ejecución pon `RUN_PRISMA_SEED=1` en `.env.docker` antes de levantar los servicios. Tras confirmar que el seed corrió correctamente, cambiá `RUN_PRISMA_SEED` a `0` y recreá/reiniciá el contenedor `backend` para evitar que el seed se ejecute de nuevo en arranques posteriores.
 
 Configurar webhook en el dashboard de PlusPagos
 
@@ -215,6 +231,24 @@ docker compose restart backend           # reiniciar solo el backend
 docker compose build --no-cache backend  # reconstruir imagen tras cambios de código
 ```
 
+Nota sobre `--build` / uso habitual:
+
+- `docker compose up -d --build` se utiliza cuando querés forzar la reconstrucción de las imágenes (cambios en `src/`, `package.json`, `Dockerfile`, o nuevos archivos que deben ser incluidos en la imagen). Usalo la primera vez o cada vez que modifiques código que requiere rebuild.
+- Una vez que la imagen ya está construida y no hiciste cambios que afecten la imagen, basta con `docker compose up -d` (más rápido).
+- Para reconstruir solo el `backend` tras cambios puntuales:
+
+```cmd
+docker compose up -d --build backend
+```
+
+- Si cambiaste `.env.docker` y querés que el contenedor lea las nuevas variables, recrealo:
+
+```cmd
+docker compose up -d --force-recreate backend
+# o bajar y subir:
+docker compose down && docker compose up -d --build
+```
+
 > Con `docker compose down -v` se borran todos los datos (BD y archivos de MinIO). El seed vuelve a correr automáticamente la próxima vez que levantes.
 
 ---
@@ -255,6 +289,27 @@ Ver `PLAN_PRUEBAS_COMPLETO.md` para los 96 casos de prueba manuales.
 | OTP no llega a Mailhog                  | Mailhog no levantó          | `docker compose up -d mailhog`                                           |
 | MinIO no levanta con `latest`           | Incompatibilidad de versión | El compose ya usa `RELEASE.2024-01-16T16-07-38Z` — no cambiar a `latest` |
 | `docker compose` se cuelga              | Docker Desktop no iniciado  | Abrir Docker Desktop, esperar ícono verde                                |
+
+| `NoSuchBucket` al subir adjuntos        | Buckets de MinIO no existen aún | Re-ejecutar el init de MinIO para crear los buckets: `docker compose run --rm minio-init`. Verificar en la consola MinIO (http://localhost:9001) que `rdam-adjuntos` y `rdam-pdfs` existen. |
+| `fn_generar_nro_tramite() no existe` (caso raro) | Funciones PL/pgSQL separadas no aplicadas | Si las migraciones no incluyeron las funciones (caso antiguo) ejecutar manualmente: `docker compose exec postgres psql -U rdam -d rdamdb -f prisma/migrations/20260304015613_init/migration_funciones_sql.sql` o forzar `docker compose exec backend npx prisma migrate deploy`. |
+
+### Nota importante sobre el seed y variables de entorno
+
+El seed (`prisma:seed`) solo se ejecuta si `RUN_PRISMA_SEED=1` está presente en el entorno que ve `docker compose` al arrancar. Para asegurarte de que Compose use `.env.docker` durante el proceso de arranque ejecutá:
+
+```bash
+cp .env.docker.example .env.docker
+docker compose --env-file .env.docker up -d --build
+```
+
+Si usás simplemente `docker compose up -d` es posible que `RUN_PRISMA_SEED` no esté disponible para la interpolación de Compose y por lo tanto el seed no se ejecute automáticamente.
+
+Si ves problemas relacionados con falta de datos (ej. tipos de certificado faltantes), ejecutá el seed manualmente dentro del contenedor `backend`:
+
+```bash
+docker compose exec backend npm run prisma:seed
+```
+
 
 ---
 

@@ -87,6 +87,8 @@ services:
         until npx prisma migrate deploy; do
           echo 'Reintentando migraciones en 5s...' && sleep 5;
         done &&
+          echo 'Aplicando funciones SQL (si existen)...' &&
+          npx prisma db execute --file prisma/migrations/20260304015613_init/migration_funciones_sql.sql || true &&
         if [ \"${RUN_PRISMA_SEED}\" = \"1\" ]; then
           echo 'Ejecutando prisma:seed...' && npm run prisma:seed || true;
         fi &&

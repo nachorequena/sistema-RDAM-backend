@@ -8,8 +8,6 @@ dist/
 .env.docker
 !.env.docker.example
 
-# Prisma
-prisma/migrations/
 
 # Logs
 *.log

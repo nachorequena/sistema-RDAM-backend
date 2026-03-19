@@ -11,6 +11,7 @@ export class EmailService {
     const transportOptions: any = {
       host: this.config.get<string>('SMTP_HOST'),
       port: this.config.get<number>('SMTP_PORT', 587),
+      secure: this.config.get<string>('SMTP_SECURE', 'false') === 'true',
     };
 
     const smtpUser = this.config.get<string>('SMTP_USER');
@@ -90,31 +91,46 @@ export class EmailService {
     `);
   }
 
-  private async send(to: string, subject: string, htmlBody: string): Promise<void> {
-    try {
-      await this.transporter.sendMail({
-        from:    this.from,
-        to,
-        subject,
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head><meta charset="UTF-8"></head>
-          <body style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#1e293b">
-            ${htmlBody}
-            <hr style="margin-top:40px;border-color:#e2e8f0">
-            <p style="color:#94a3b8;font-size:0.8em">
-              Sistema de Gestión de Certificados Digitales — RDAM<br>
-              Este es un correo automático, por favor no respondas.
-            </p>
-          </body>
-          </html>
-        `,
-      });
-      this.logger.debug(`Email enviado a ${to}: ${subject}`);
-    } catch (error) {
-      // Log pero no propaga: la operación de BD ya se hizo, el email es best-effort
-      this.logger.error(`Error enviando email a ${to}: ${error.message}`);
+  private async send(to: string, subject: string, htmlBody: string): Promise<boolean> {
+    // Reintentos simples con backoff exponencial (3 intentos)
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await this.transporter.sendMail({
+          from:    this.from,
+          to,
+          subject,
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="UTF-8"></head>
+            <body style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#1e293b">
+              ${htmlBody}
+              <hr style="margin-top:40px;border-color:#e2e8f0">
+              <p style="color:#94a3b8;font-size:0.8em">
+                Sistema de Gestión de Certificados Digitales — RDAM<br>
+                Este es un correo automático, por favor no respondas.
+              </p>
+            </body>
+            </html>
+          `,
+        });
+        this.logger.debug(`Email enviado a ${to}: ${subject}`);
+        return true;
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Intento ${attempt} - No se pudo enviar email a ${to}: ${errMsg}`);
+        if (attempt < maxAttempts) {
+          // backoff
+          await new Promise((r) => setTimeout(r, 300 * attempt));
+          continue;
+        }
+        // último intento fallido
+        this.logger.error(`Error enviando email a ${to} después de ${maxAttempts} intentos: ${errMsg}`);
+        // No propagamos para no romper la operación principal; retornamos false para quien quiera actuar
+        return false;
+      }
     }
+    return false;
   }
 }

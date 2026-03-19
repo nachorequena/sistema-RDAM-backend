@@ -5,6 +5,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SolicitudesService } from './solicitudes.service';
 import { PagosService } from '../pagos/pagos.service';
+import { PrismaService } from '../config/prisma.service';
 import { JwtCiudadanoGuard } from '../auth/guards/jwt.guard';
 import { CurrentUser } from '../common/decorators/auth.decorator';
 import { CrearSolicitudDto, ConsultaPublicaDto, PaginacionDto } from './dto/solicitudes.dto';
@@ -15,6 +16,7 @@ export class SolicitudesController {
   constructor(
     private readonly solicitudesService: SolicitudesService,
     private readonly pagosService: PagosService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post()
@@ -43,6 +45,15 @@ export class SolicitudesController {
     return {
       data: await this.solicitudesService.consultaPublica(query.nroTramite, query.cuil),
     };
+  }
+
+  @Get('tipos-certificado')
+  async tiposCertificado() {
+    const tipos = await this.prisma.tipoCertificado.findMany({
+      where: { activo: true },
+      orderBy: { id: 'asc' },
+    });
+    return { data: tipos };
   }
 
   @Get(':id')

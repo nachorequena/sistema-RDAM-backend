@@ -12,10 +12,32 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3001);
-  const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+  const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
 
   // ── Seguridad ────────────────────────────────────────────────────────────
-  app.use(helmet());
+  const isDev = configService.get('NODE_ENV') !== 'production';
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: isDev
+        ? false
+        : {
+            directives: {
+              ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+              'form-action': ["'self'"],
+            },
+          },
+    }),
+  );
+
+  // En desarrollo permitimos framing desde el frontend (evita X-Frame-Options SAMEORIGIN)
+  if (isDev) {
+    app.use((req, res, next) => {
+      res.setHeader('X-Frame-Options', 'ALLOWALL');
+      next();
+    });
+  }
+
   app.enableCors({
     origin: frontendUrl,
     credentials: true,

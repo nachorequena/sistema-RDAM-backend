@@ -93,12 +93,16 @@ export class AuthController {
   // ── Helper ────────────────────────────────────────────────────────────────
 
   private setRefreshCookie(res: Response, token: string): void {
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('refresh_token', token, {
-      httpOnly:  true,
-      secure:    process.env.NODE_ENV === 'production',
-      sameSite:  'strict',
-      maxAge:    7 * 24 * 60 * 60 * 1000, // 7 días en ms
-      path:      '/api/auth/refresh',
+      httpOnly: true,
+      secure: isProd,
+      // En producción usamos 'none' junto con secure=true (cookies cross-site).
+      // En desarrollo usamos 'lax' para evitar que el navegador bloquee la cookie
+      // cuando frontend y backend corren en distintos puertos.
+      sameSite: isProd ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días en ms
+      path: '/',
     });
   }
 }

@@ -30,6 +30,16 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
+// Development helper: permitir que la página del mock sea embebida desde el frontend
+// (evita errores de 'Unsafe attempt to load URL' durante pruebas locales).
+app.use((req, res, next) => {
+  // Permitimos framing en desarrollo; en producción la pasarela real debe controlar esto.
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
+  // Añadimos CSP que permita frames desde localhost (útil si el navegador respeta CSP primero)
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' http://localhost:5173");
+  next();
+});
+
 // ============================================
 // TARJETAS DE PRUEBA
 // ============================================

@@ -15,12 +15,25 @@ import { Readable } from 'stream';
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly s3: S3Client;
+  private readonly s3Public: S3Client;
   private readonly bucketAdjuntos: string;
   private readonly bucketPdfs: string;
 
   constructor(private readonly config: ConfigService) {
     this.s3 = new S3Client({
       endpoint:       config.get<string>('STORAGE_ENDPOINT'),
+      region:         config.get<string>('STORAGE_REGION', 'us-east-1'),
+      credentials: {
+        accessKeyId:     config.getOrThrow<string>('STORAGE_ACCESS_KEY'),
+        secretAccessKey: config.getOrThrow<string>('STORAGE_SECRET_KEY'),
+      },
+      forcePathStyle: config.get<boolean>('STORAGE_FORCE_PATH_STYLE', true),
+    });
+
+    // Cliente separado para generar URLs presignadas que verá el browser
+    const publicEndpoint = config.get<string>('STORAGE_PUBLIC_ENDPOINT') ?? config.get<string>('STORAGE_ENDPOINT');
+    this.s3Public = new S3Client({
+      endpoint:       publicEndpoint,
       region:         config.get<string>('STORAGE_REGION', 'us-east-1'),
       credentials: {
         accessKeyId:     config.getOrThrow<string>('STORAGE_ACCESS_KEY'),
@@ -112,7 +125,7 @@ export class StorageService {
   async getPresignedUrl(ruta: string, bucket: 'adjuntos' | 'pdfs'): Promise<string> {
     const bucketName = bucket === 'pdfs' ? this.bucketPdfs : this.bucketAdjuntos;
     const command = new GetObjectCommand({ Bucket: bucketName, Key: ruta });
-    return getSignedUrl(this.s3, command, { expiresIn: 900 }); // 15 min
+    return getSignedUrl(this.s3Public, command, { expiresIn: 900 }); // 15 min
   }
 
   /**
